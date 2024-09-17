@@ -4,10 +4,10 @@
   "description": "",
   "author": "",
   "scripts": {
-    "start": "vue-cli-service serve",
+    "start": "cross-env NODE_OPTIONS=--openssl-legacy-provider vue-cli-service serve",
     "build": "vue-cli-service build",
     "build:lib": "VUE_CLI_SERVICE_CONFIG_PATH=./vue.config.lib.js vue-cli-service build --target lib --formats commonjs src/lib.js",
-    "build:wc": "npx vue-cli-service build --target wc --inline-vue --name pretalx-schedule src/App.vue",
+    "build:wc": "cross-env NODE_OPTIONS=--openssl-legacy-provider npx vue-cli-service build --target wc --inline-vue --name pretalx-schedule src/App.vue",
     "lint": "vue-cli-service lint",
     "test": "echo \"Error: no test specified\" && exit 1",
     "analyze": "ANALYZE=true npm run build",
@@ -16,6 +16,7 @@
   "main": "dist/schedule.common.js",
   "dependencies": {
     "buntpapier": "^1.8.6",
+    "cross-env": "^7.0.3",
     "lodash": "^4.17.20",
     "markdown-it": "^12.1.0",
     "moment": "^2.27.0",
