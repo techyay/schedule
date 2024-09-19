@@ -56,6 +56,13 @@
 		.error-message(v-for="message in errorMessages", :key="message")
 			.btn.btn-danger(@click="errorMessages = errorMessages.filter(m => m !== message)") x
 			div.message {{ message }}
+	.modal(v-if="showModal")
+		.modal-content
+			.modal-header
+				.h3.modal-title Warning
+			.modal-body.p Please login to add a session to your personal schedule.
+			.modal-footer
+				.button(@click="closeModal") OK
 </template>
 <script>
 import Vue from 'vue'
@@ -64,6 +71,7 @@ import moment from 'moment-timezone'
 import LinearSchedule from 'components/LinearSchedule'
 import GridSchedule from 'components/GridSchedule'
 import { findScrollParent, getLocalizedString } from 'utils'
+import {getFavoriteTalks, saveFavoriteTalk} from "@/api/favorite.api";
 
 Vue.use(Buntpapier)
 
@@ -107,6 +115,7 @@ export default {
 			apiUrl: null,
 			translationMessages: {},
 			errorMessages: [],
+			showModal: false,
 		}
 	},
 	computed: {
@@ -146,7 +155,8 @@ export default {
 					end: moment.tz(session.end, this.currentTimezone),
 					speakers: session.speakers?.map(s => this.speakersLookup[s]),
 					track: this.tracksLookup[session.track],
-					room: this.roomsLookup[session.room]
+					room: this.roomsLookup[session.room],
+					fav_count: session.fav_count
 				})
 			}
 			sessions.sort((a, b) => a.start.diff(b.start))
@@ -267,6 +277,9 @@ export default {
 		// TODO destroy observers
 	},
 	methods: {
+		closeModal () {
+			this.showModal = false
+		},
 		changeDay (day) {
 			if (day.isSame(this.currentDay)) return
 			this.currentDay = moment(day, this.currentTimezone).startOf('day')
@@ -298,29 +311,23 @@ export default {
 			return response.json()
 		},
 		async loadFavs () {
-			const data = localStorage.getItem(`${this.eventSlug}_favs`)
-			let favs = []
+			const dataCached = localStorage.getItem(`${this.eventSlug}_favs`)
+			let userData = []
+			userData = await getFavoriteTalks(this.eventSlug)
+			let data
+			if (userData.length !== 0) {
+				data = JSON.stringify(userData)
+			} else {
+				data = dataCached
+			}
 			if (data) {
 				try {
-					favs = JSON.parse(data) || []
+					return JSON.parse(data)
 				} catch {
 					localStorage.setItem(`${this.eventSlug}_favs`, '[]')
 				}
 			}
-			if (this.loggedIn) {
-				try {
-					favs = await this.apiRequest('submissions/favourites/', 'GET').then(data => {
-						const toFav = favs.filter(e => !data.includes(e))
-						toFav.forEach(e => this.apiRequest(`submissions/${e}/favourite/`, 'POST').catch())
-						return data
-					}).catch(e => {
-						this.pushErrorMessage(this.translationMessages.favs_not_loaded || this.translationMessages.not_loaded)
-					})
-				} catch (e) {
-					this.pushErrorMessage(this.translationMessages.favs_not_loaded || this.translationMessages.not_loaded)
-				}
-			}
-			return favs
+			return []
 		},
 		pushErrorMessage (message) {
 			if (!message || !message.length) return
@@ -330,36 +337,37 @@ export default {
 		pruneFavs (favs, schedule) {
 			const talks = schedule.talks || []
 			const talkIds = talks.map(e => e.code)
-			// we're not pushing the changed list to the server, as if a talk vanished but will appear again,
-			// we want it to still be faved
 			return favs.filter(e => talkIds.includes(e))
 		},
-		saveFavs () {
+		async saveFavs () {
+			const response = saveFavoriteTalk(this.eventSlug, this.favs)
+			if (response.status === 400) {
+				const data = await response.json()
+				console.log('data:', data)
+				if (data === 'user_not_logged_in') {
+					this.showModal = true
+					return
+				}
+			}
 			localStorage.setItem(`${this.eventSlug}_favs`, JSON.stringify(this.favs))
 		},
-		fav (id) {
+		async fav (id) {
+			if (!this.loggedIn) {
+				this.showModal = true
+				return
+			}
 			if (!this.favs.includes(id)) {
 				this.favs.push(id)
-				this.saveFavs()
-			}
-			if (this.loggedIn) {
-				this.apiRequest(`submissions/${id}/favourite/`, 'POST').catch(e => {
-					this.pushErrorMessage(this.translationMessages.favs_not_saved || this.translationMessages.not_saved)
-				})
-			} else {
-				this.pushErrorMessage(this.translationMessages.favs_not_logged_in || this.translationMessages.not_logged_in)
+				await this.saveFavs()
 			}
 		},
-		unfav (id) {
-			this.favs = this.favs.filter(elem => elem !== id)
-			this.saveFavs()
-			if (this.loggedIn) {
-				this.apiRequest(`submissions/${id}/favourite/`, 'DELETE').catch(e => {
-					this.pushErrorMessage(this.translationMessages.favs_not_saved || this.translationMessages.not_saved)
-				})
-			} else {
-				this.pushErrorMessage(this.translationMessages.favs_not_logged_in || this.translationMessages.not_logged_in)
+		async unfav (id) {
+			if (!this.loggedIn) {
+				this.showModal = true
+				return
 			}
+			this.favs = this.favs.filter(elem => elem !== id)
+			await this.saveFavs()
 			if (!this.favs.length) this.onlyFavs = false
 		},
 		resetFilteredTracks () {
@@ -370,6 +378,60 @@ export default {
 </script>
 <style lang="stylus">
 @import 'styles/global.styl'
+.modal {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 999;
+}
+
+.modal-content {
+	background-color: white;
+	padding: 20px;
+	border-radius: 5px;
+	width: 300px;
+	text-align: center;
+	position: relative;
+	border: 1px solid var(--pretalx-clr-primary);
+}
+
+.modal-header {
+	margin-bottom: 10px;
+}
+
+.modal-title {
+	margin: 0;
+	font-size: 1.25em;
+	color: var(--pretalx-clr-primary);
+}
+
+.modal-body {
+	margin-bottom: 20px;
+}
+
+.modal-footer {
+	display: flex;
+	justify-content: flex-end;
+	.button {
+		cursor:pointer;
+		border: 1px solid var(--pretalx-clr-primary)
+		padding: 2px 5px;
+		border-radius: 5px;
+	}
+}
+
+.modal-footer button {
+	background-color: transparent;
+	border: 1px solid #ccc;
+	border-radius: 5px;
+	padding: 5px 10px;
+	cursor: pointer;
+}
 .schedule-error
 	color: $clr-error
 	font-size: 18px

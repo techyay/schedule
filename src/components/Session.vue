@@ -19,6 +19,7 @@ a.c-linear-schedule-session(:class="{faved}", :style="style", :href="link", @cli
 			.track(v-if="session.track") {{ getLocalizedString(session.track.name) }}
 			.room(v-if="showRoom && session.room") {{ getLocalizedString(session.room.name) }}
 	.session-icons
+		.fav-count(v-if="session.fav_count > 0 && isLinearSchedule") {{ session.fav_count > 99 ? "99+" : session.fav_count  }}
 		bunt-icon-button.btn-fav-container(@click.prevent.stop="toggleFav")
 			svg.star(viewBox="0 0 24 24", ref="star")
 				path(d="M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z")
@@ -57,7 +58,8 @@ export default {
 		hasAmPm: {
 			type: Boolean,
 			default: false
-		}
+		},
+		isLinearSchedule: Boolean
 	},
 	inject: {
 		eventUrl: { default: null },
@@ -225,6 +227,22 @@ export default {
 				text-align: right
 				color: $clr-secondary-text-light
 				ellipsis()
+	.fav-count {
+	border: 1px solid;
+	border-radius: 50%;
+	position: absolute;
+	top: 5px;
+	right: 40px;
+	width: 25px;
+	height: 25px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+	background-color: var(--track-color);
+	color: $clr-primary-text-dark;
+	}
+
 	.do-not-record
 		width: 24px
 		height: 24px

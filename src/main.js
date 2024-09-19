@@ -7,7 +7,7 @@ Vue.config.productionTip = false
 new Vue({
 	render: h => h(App, {
 		props: {
-			eventUrl: 'https://pretalx.com/democon/',
+			eventUrl: 'http://localhost:8000/democon/',
 			locale: 'en-ie'
 		}
 	})
